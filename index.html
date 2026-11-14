@@ -1,0 +1,1950 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>전류가 만드는 자기장 3D 가상 실험실 & 자기장 서핑 미션</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- 3D 실험실 구현을 위한 Three.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <style>
+    * {
+      font-family: 'Noto Sans KR', sans-serif;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+    body {
+      margin: 0;
+      background-color: #0f172a;
+      color: #f8fafc;
+      overflow-x: hidden;
+    }
+    canvas {
+      touch-action: none;
+      display: block;
+    }
+    @keyframes floatSlow {
+      0%, 100% { transform: translateY(0px); }
+      50% { transform: translateY(-6px); }
+    }
+    .animate-float {
+      animation: floatSlow 3s ease-in-out infinite;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col bg-slate-900 text-slate-100 select-none">
+
+  <!-- 상단 네비게이션 바 -->
+  <header class="bg-slate-800/90 backdrop-blur-md border-b border-slate-700 sticky top-0 z-30 px-4 py-3 shadow-lg">
+    <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-rose-500 to-sky-500 flex items-center justify-center shadow-md font-black text-white text-lg">
+          3D
+        </div>
+        <div>
+          <span class="text-xs font-bold text-sky-400 tracking-wider">중2 과학 · VII. 전기와 자기</span>
+          <h1 class="text-lg sm:text-xl font-extrabold text-white leading-tight">전류가 만드는 자기장 3D 실험실</h1>
+        </div>
+      </div>
+
+      <!-- 탭 전환 버튼 -->
+      <nav class="flex bg-slate-900/90 p-1.5 rounded-xl border border-slate-700 w-full sm:w-auto">
+        <button id="tab-lab-btn" onclick="switchTab('lab')" class="flex-1 sm:flex-initial px-4 py-2 rounded-lg text-sm font-bold transition-all bg-sky-500 text-white shadow-md flex items-center justify-center gap-2">
+          <span>🔬</span> 3D 교과서 가상 실험실
+        </button>
+        <button id="tab-game-btn" onclick="switchTab('game')" class="flex-1 sm:flex-initial px-4 py-2 rounded-lg text-sm font-bold transition-all text-slate-400 hover:text-white flex items-center justify-center gap-2">
+          <span>🚀</span> 자기장 서핑! 골인 미션
+        </button>
+      </nav>
+    </div>
+  </header>
+
+  <!-- 메인 콘텐츠 영역 -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-5 flex flex-col">
+
+    <!-- ==========================================
+         탭 1: 3D 교과서 가상 실험실 (미래엔 264~265쪽 - 고정본)
+         ========================================== -->
+    <section id="view-lab" class="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+      
+      <!-- 좌측: 3D 실험 캔버스 영역 -->
+      <div class="lg:col-span-8 bg-slate-800 rounded-2xl border border-slate-700 shadow-xl flex flex-col overflow-hidden relative min-h-[460px] sm:min-h-[580px]">
+        <!-- 상단 상태 배지 및 시점 초기화 -->
+        <div class="p-3 bg-slate-800/90 border-b border-slate-700/80 flex flex-wrap items-center justify-between gap-2 z-10">
+          <div class="flex items-center gap-2 text-xs sm:text-sm font-medium text-slate-300">
+            <span class="px-2.5 py-1 rounded-full bg-sky-500/20 border border-sky-500/40 text-sky-300 font-bold">3D 탐구 활동</span>
+            <span>빈 원 위로 나침반을 옮겨 N극 방향(화살표) 기록하기</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="resetCameraView('angle')" class="px-2.5 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-xs font-bold text-slate-200 transition">
+              📐 입체 시점
+            </button>
+            <button onclick="resetCameraView('top')" class="px-2.5 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-xs font-bold text-slate-200 transition">
+              ⬇️ 위에서 보기
+            </button>
+          </div>
+        </div>
+
+        <!-- 3D 가상 실험 캔버스 컨테이너 -->
+        <div id="lab-3d-container" class="flex-1 relative w-full h-full bg-gradient-to-b from-slate-950 via-slate-900 to-slate-800 cursor-grab active:cursor-grabbing">
+          
+          <!-- 좌측 상단 상태 표시 -->
+          <div class="absolute top-3 left-3 bg-slate-900/85 backdrop-blur border border-slate-700 px-3 py-2 rounded-xl text-xs font-bold text-slate-300 flex flex-col gap-1 pointer-events-none z-10 shadow-lg">
+            <div class="flex items-center gap-2">
+              <span class="text-rose-400">▲ 북쪽 (N)</span>
+              <span class="text-slate-600">|</span>
+              <span id="lab-status-text" class="text-amber-400">전원 OFF</span>
+            </div>
+            <div class="text-[11px] text-slate-400 font-normal">
+              • <span class="text-amber-400 font-bold">노란색 구리 코일 위쪽 반원</span>이 실험판 위로 올라온 부분입니다.
+            </div>
+          </div>
+
+          <!-- 우측 상단 기록 카운터 -->
+          <div class="absolute top-3 right-3 bg-slate-900/85 backdrop-blur border border-slate-700 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-2 z-10 shadow-lg">
+            <span class="text-slate-400">기록된 위치:</span>
+            <span id="recorded-count-badge" class="text-rose-400 font-black text-sm">0 / 9</span>
+          </div>
+
+          <!-- 하단 플로팅 액션 바 (기록하기 & 전체 지우기) -->
+          <div class="absolute bottom-3 left-3 right-3 flex flex-col sm:flex-row items-center justify-between gap-2 z-10 pointer-events-none">
+            <div class="bg-slate-900/90 border border-slate-700/80 text-slate-300 text-xs px-3 py-2 rounded-xl pointer-events-auto shadow-lg">
+              🖱️ <b>빈 공간 드래그:</b> 3D 화면 회전 &nbsp;|&nbsp; 🧭 <b>나침반 드래그:</b> 측정 위치로 이동
+            </div>
+            <div class="flex items-center gap-2 pointer-events-auto">
+              <button id="btn-record-slot" onclick="recordCurrentSlot()" class="px-4 py-2.5 rounded-xl bg-rose-500 hover:bg-rose-400 disabled:bg-slate-700 disabled:text-slate-500 text-white font-extrabold text-xs sm:text-sm shadow-lg shadow-rose-500/30 transition-all flex items-center gap-1.5">
+                <span>📍</span> <span id="record-btn-text">빈 원 위에 나침반을 놓으세요</span>
+              </button>
+              <button onclick="clearAllRecordedSlots()" class="px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-300 font-bold text-xs shadow-lg transition-all">
+                🗑️ 기록 초기화
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 우측: 실험 조작 패널 & 탐구 정리 -->
+      <div class="lg:col-span-4 flex flex-col gap-4">
+        
+        <!-- 전원 및 전류 제어판 -->
+        <div class="bg-slate-800 rounded-2xl border border-slate-700 p-5 shadow-xl flex flex-col gap-4">
+          <div class="flex items-center justify-between">
+            <h2 class="text-base font-extrabold text-white flex items-center gap-2">
+              <span>⚡</span> 전원 장치 조작
+            </h2>
+            <!-- 전원 스위치 -->
+            <button id="btn-power" onclick="togglePower()" class="px-4 py-2 rounded-xl font-extrabold text-sm transition-all bg-slate-700 text-slate-300 border border-slate-600 hover:bg-slate-600 flex items-center gap-2 shadow">
+              <span id="power-indicator" class="w-3 h-3 rounded-full bg-slate-400"></span>
+              <span id="power-label">스위치 OFF</span>
+            </button>
+          </div>
+
+          <!-- 과정 3: 전류 방향 전환 -->
+          <div class="bg-slate-900/60 p-3.5 rounded-xl border border-slate-700/70">
+            <label class="block text-xs font-bold text-slate-400 mb-2">과정 3. 전류의 방향 전환 (판 위 코일 기준)</label>
+            <div class="grid grid-cols-2 gap-2">
+              <button id="btn-dir-up" onclick="setCurrentDir(1)" class="py-2.5 px-3 rounded-xl font-bold text-sm transition-all bg-rose-500/20 border-2 border-rose-500 text-rose-300 flex items-center justify-center gap-1.5">
+                <span>⬆️</span> 위쪽(북쪽) 방향
+              </button>
+              <button id="btn-dir-down" onclick="setCurrentDir(-1)" class="py-2.5 px-3 rounded-xl font-bold text-sm transition-all bg-slate-800 border border-slate-700 text-slate-400 hover:text-white flex items-center justify-center gap-1.5">
+                <span>⬇️</span> 아래쪽(남쪽) 방향
+              </button>
+            </div>
+          </div>
+
+          <!-- 심화 관찰 옵션 (투시경) -->
+          <div class="flex flex-col gap-2 pt-1 border-t border-slate-700">
+            <span class="text-xs font-bold text-slate-400">심화 관찰 도구</span>
+
+            <!-- 자기력선 투시경 토글 -->
+            <button id="btn-xray" onclick="toggleXray()" class="w-full py-2.5 px-3.5 rounded-xl text-sm font-bold transition-all bg-slate-900/80 border border-slate-700 text-slate-300 hover:border-sky-500/50 flex items-center justify-between">
+              <span class="flex items-center gap-2">👁️ 3D 자기력선 투시경 (그림 VII-12)</span>
+              <span id="xray-badge" class="text-xs bg-slate-700 text-slate-300 px-2 py-0.5 rounded-md font-extrabold">OFF</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 교과서 탐구 방법 안내 카드 -->
+        <div class="bg-gradient-to-br from-slate-800 to-slate-800/80 rounded-2xl border border-slate-700 p-4 shadow-lg flex-1 flex flex-col justify-between">
+          <div>
+            <h3 class="text-sm font-extrabold text-amber-400 mb-2 flex items-center gap-1.5">
+              <span>📝</span> 탐구 실험 수행 방법
+            </h3>
+            <ol class="text-xs text-slate-300 space-y-2 leading-relaxed list-decimal list-inside">
+              <li><b>스위치 ON</b>을 누르고 전류 방향(위쪽/아래쪽)을 선택합니다.</li>
+              <li>아크릴 판 위의 <b>이동식 나침반</b>을 드래그하여 9개의 <b>빈 동그라미</b> 위로 차례대로 옮겨보세요.</li>
+              <li>나침반 바늘의 <strong class="text-rose-400">빨간 N극 화살표</strong>가 멈추면 <b>[현재 위치 방향 기록]</b> 버튼을 눌러 화살표를 남깁니다.</li>
+              <li>9개 지점을 모두 기록한 뒤 전체 화살표가 그리는 자기장 모양을 확인해 보세요!</li>
+            </ol>
+          </div>
+          <button onclick="switchTab('game')" class="mt-4 w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-extrabold text-sm shadow-md transition-all flex items-center justify-center gap-2">
+            <span>🚀</span> 자기장 서핑! 골인 미션 도전하기 →
+          </button>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ==========================================
+         탭 2: 자기장 서핑! 나침반 탐사선 골인 미션
+         ========================================== -->
+    <section id="view-game" class="hidden flex-1 flex-col gap-4">
+      
+      <!-- 게임 상단 미션 컨트롤 바 -->
+      <div class="bg-slate-800 rounded-2xl border border-slate-700 p-4 shadow-xl flex flex-col lg:flex-row items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+          <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-rose-500/20 to-amber-500/20 border border-amber-500/40 flex items-center justify-center text-2xl animate-float shrink-0">
+            🚀
+          </div>
+          <div>
+            <div class="flex items-center gap-2 flex-wrap">
+              <span id="stage-badge" class="px-2.5 py-0.5 rounded-md bg-amber-500 text-slate-950 text-xs font-black">STAGE 1 / 5</span>
+              <h2 id="stage-title" class="text-base sm:text-lg font-extrabold text-white">1단계: 탐사선 직진 워밍업</h2>
+            </div>
+            <p id="stage-desc" class="text-xs sm:text-sm text-slate-300 mt-0.5">
+              코일에 전류가 흐르지 않으면 탐사선의 빨간 N극 앞머리는 무조건 북쪽(↑)을 향합니다. 출발 버튼을 눌러보세요!
+            </p>
+          </div>
+        </div>
+
+        <!-- 스테이지 선택 버튼 -->
+        <div class="flex flex-wrap items-center gap-2 w-full lg:w-auto justify-end">
+          <div class="flex bg-slate-900 p-1 rounded-xl border border-slate-700">
+            <button onclick="loadStage(1)" id="st-btn-1" class="px-2.5 py-1.5 rounded-lg text-xs font-extrabold bg-amber-500 text-slate-950 transition-all">1단계</button>
+            <button onclick="loadStage(2)" id="st-btn-2" class="px-2.5 py-1.5 rounded-lg text-xs font-extrabold text-slate-400 hover:text-white transition-all">2단계</button>
+            <button onclick="loadStage(3)" id="st-btn-3" class="px-2.5 py-1.5 rounded-lg text-xs font-extrabold text-slate-400 hover:text-white transition-all">3단계</button>
+            <button onclick="loadStage(4)" id="st-btn-4" class="px-2.5 py-1.5 rounded-lg text-xs font-extrabold text-slate-400 hover:text-white transition-all">4단계</button>
+            <button onclick="loadStage(5)" id="st-btn-5" class="px-2.5 py-1.5 rounded-lg text-xs font-extrabold text-slate-400 hover:text-white transition-all">5단계</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 게임 메인 캔버스 및 조작 패널 -->
+      <div class="flex-1 bg-slate-950 rounded-2xl border border-slate-700 shadow-2xl relative overflow-hidden min-h-[480px] sm:min-h-[560px] flex flex-col">
+        <canvas id="gameCanvas" class="w-full flex-1 cursor-grab active:cursor-grabbing"></canvas>
+
+        <!-- 상단 좌측 상태 및 방위 표시 HUD -->
+        <div class="absolute top-3 left-3 bg-slate-900/90 backdrop-blur border border-slate-700 px-3.5 py-2 rounded-xl flex items-center gap-3 pointer-events-none shadow-lg">
+          <div class="flex items-center gap-1.5 text-xs font-extrabold text-rose-400">
+            <span>▲ 북쪽 (N)</span>
+          </div>
+          <div class="h-5 w-[1px] bg-slate-700"></div>
+          <div class="text-xs">
+            <span class="text-slate-400">미션 상태: </span>
+            <span id="surf-status-text" class="font-extrabold text-sky-400">코일을 추가·배치하고 출발하세요!</span>
+          </div>
+        </div>
+
+        <!-- 상단 우측 실패/충돌 알림 토스트 배지 -->
+        <div id="surf-fail-banner" class="hidden absolute top-16 left-1/2 -translate-x-1/2 bg-rose-600/95 border-2 border-rose-300 text-white px-5 py-2.5 rounded-2xl shadow-2xl flex items-center gap-3 z-10">
+          <span class="text-lg">💥</span>
+          <span id="surf-fail-msg" class="text-xs sm:text-sm font-extrabold">장애물에 부딪혔습니다! 코일 위치나 설정을 바꿔 다시 도전하세요.</span>
+          <button onclick="resetProbe()" class="px-3 py-1 rounded-lg bg-white text-rose-700 font-black text-xs hover:bg-rose-100 transition">
+            ↺ 다시 준비
+          </button>
+        </div>
+
+        <!-- 하단 조작 바 (코일 추가/제거 + 선택 코일 제어 + 탐사선 출발 버튼) -->
+        <div class="bg-slate-900/95 backdrop-blur-md border-t border-slate-700/90 p-3 sm:px-5 flex flex-col lg:flex-row items-center justify-between gap-3 z-10">
+          
+          <!-- 코일 배치 및 빠른 조작 패널 -->
+          <div id="coil-control-panel" class="flex flex-wrap items-center justify-center lg:justify-start gap-2 w-full lg:w-auto">
+            <!-- 코일 추가 버튼 (모든 단계 최대 6개) -->
+            <button id="btn-add-coil" onclick="addNewCoil()" class="px-3 py-1.5 rounded-lg text-xs font-extrabold bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-800 disabled:text-slate-500 text-slate-950 transition-all flex items-center gap-1 shadow">
+              <span>➕ 코일 추가</span>
+              <span id="coil-quota-badge" class="bg-slate-950/20 px-1.5 py-0.5 rounded text-[11px]">0/6</span>
+            </button>
+
+            <span id="selected-coil-label" class="text-xs font-extrabold text-amber-400 bg-amber-500/15 border border-amber-500/30 px-3 py-1.5 rounded-lg">
+              코일 없음
+            </span>
+
+            <div id="coil-action-buttons" class="hidden flex flex-wrap items-center gap-1.5">
+              <button id="btn-surf-power" onclick="toggleSelectedCoilPower()" class="px-3 py-1.5 rounded-lg text-xs font-extrabold border transition-all bg-slate-800 border-slate-600 text-slate-300">
+                스위치 OFF
+              </button>
+              <button id="btn-surf-dir" onclick="toggleSelectedCoilDir()" class="px-3 py-1.5 rounded-lg text-xs font-extrabold border transition-all bg-slate-800 border-slate-600 text-slate-300">
+                전류 방향: 위쪽 (↑)
+              </button>
+              <div class="flex items-center gap-1 bg-slate-800 border border-slate-600 rounded-lg px-2 py-1">
+                <span class="text-[11px] font-bold text-slate-400">세기:</span>
+                <button onclick="setSelectedCoilStrength(1.5)" id="btn-str-1" class="px-1.5 py-0.5 rounded text-[11px] font-extrabold text-slate-300 hover:text-white transition">약</button>
+                <button onclick="setSelectedCoilStrength(2.3)" id="btn-str-2" class="px-1.5 py-0.5 rounded text-[11px] font-extrabold bg-sky-500 text-slate-950 transition">중</button>
+                <button onclick="setSelectedCoilStrength(3.2)" id="btn-str-3" class="px-1.5 py-0.5 rounded text-[11px] font-extrabold text-slate-300 hover:text-white transition">강</button>
+              </div>
+              <button id="btn-remove-coil" onclick="removeSelectedCoil()" class="px-2.5 py-1.5 rounded-lg text-xs font-extrabold border border-rose-500/40 bg-rose-500/15 text-rose-300 hover:bg-rose-500 hover:text-white transition-all">
+                🗑️ 제거
+              </button>
+            </div>
+          </div>
+
+          <!-- 출발 / 초기화 액션 버튼 -->
+          <div class="flex items-center gap-2 w-full lg:w-auto justify-end">
+            <button onclick="resetProbe()" id="btn-surf-reset" class="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 font-extrabold text-xs sm:text-sm transition-all">
+              ↺ 위치 초기화
+            </button>
+            <button onclick="launchProbe()" id="btn-surf-launch" class="flex-1 sm:flex-initial px-6 py-2.5 rounded-xl bg-gradient-to-r from-rose-500 to-amber-500 hover:from-rose-400 hover:to-amber-400 text-slate-950 font-black text-sm shadow-lg shadow-amber-500/25 transition-all flex items-center justify-center gap-2">
+              <span>🚀</span> <span id="launch-btn-text">탐사선 출발!</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 스테이지 클리어 축하 모달 오버레이 -->
+        <div id="clear-modal" class="hidden absolute inset-0 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 z-20">
+          <div class="bg-slate-800 border-2 border-amber-400 rounded-3xl max-w-md w-full p-6 text-center shadow-2xl transform transition-all">
+            <div class="w-16 h-16 mx-auto mb-3 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-3xl shadow-lg">
+              🏆
+            </div>
+            <span id="modal-badge" class="inline-block px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 text-xs font-extrabold mb-2">
+              STAGE 1 CLEAR!
+            </span>
+            <h3 id="modal-title" class="text-xl sm:text-2xl font-black text-white mb-2">
+              골인 지점 도달 성공!
+            </h3>
+            <p id="modal-concept" class="text-sm text-slate-300 bg-slate-900/80 p-4 rounded-2xl border border-slate-700 leading-relaxed mb-5 text-left">
+              개념 설명 영역
+            </p>
+            <div class="flex gap-2">
+              <button onclick="closeModalAndReplay()" class="flex-1 py-3 rounded-xl bg-slate-700 hover:bg-slate-600 text-white font-bold text-sm transition-all">
+                다시 플레이
+              </button>
+              <button id="modal-next-btn" onclick="goNextStage()" class="flex-1 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-sm shadow-lg transition-all">
+                다음 스테이지 →
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <script>
+    /* ==========================================================================
+       1. 전역 상태 및 공통 탭 전환 / 유틸리티
+       ========================================================================== */
+    let currentTab = 'lab';
+
+    function switchTab(tab) {
+      currentTab = tab;
+      const labView = document.getElementById('view-lab');
+      const gameView = document.getElementById('view-game');
+      const labBtn = document.getElementById('tab-lab-btn');
+      const gameBtn = document.getElementById('tab-game-btn');
+
+      if (tab === 'lab') {
+        labView.classList.remove('hidden');
+        labView.classList.add('grid');
+        gameView.classList.add('hidden');
+        gameView.classList.remove('flex');
+
+        labBtn.className = 'flex-1 sm:flex-initial px-4 py-2 rounded-lg text-sm font-bold transition-all bg-sky-500 text-white shadow-md flex items-center justify-center gap-2';
+        gameBtn.className = 'flex-1 sm:flex-initial px-4 py-2 rounded-lg text-sm font-bold transition-all text-slate-400 hover:text-white flex items-center justify-center gap-2';
+
+        setTimeout(() => resizeLab3D(), 30);
+      } else {
+        labView.classList.add('hidden');
+        labView.classList.remove('grid');
+        gameView.classList.remove('hidden');
+        gameView.classList.add('flex');
+
+        gameBtn.className = 'flex-1 sm:flex-initial px-4 py-2 rounded-lg text-sm font-bold transition-all bg-amber-500 text-slate-950 shadow-md flex items-center justify-center gap-2';
+        labBtn.className = 'flex-1 sm:flex-initial px-4 py-2 rounded-lg text-sm font-bold transition-all text-slate-400 hover:text-white flex items-center justify-center gap-2';
+
+        setTimeout(() => {
+          resizeGameCanvas();
+          if (!gameState.initialized) {
+            gameState.initialized = true;
+            loadStage(1);
+          }
+        }, 30);
+      }
+    }
+
+    // 각도 최단 경로 보간 함수
+    function lerpAngle(a, b, t) {
+      let diff = b - a;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+      return a + diff * t;
+    }
+
+    /* ==========================================================================
+       2. 탭 1: 3D 교과서 가상 실험실 (Three.js 기반 - 고정본)
+       ========================================================================== */
+    const labState = {
+      powerOn: false,
+      currentDir: 1,      // 1: 판 위 도선에서 위쪽(-Z, 북쪽), -1: 아래쪽(+Z, 남쪽)
+      currentStrength: 3, // 기본 전류 세기
+      xrayOn: false,
+      activeSlotIndex: -1,
+      recordedSlots: new Array(9).fill(null) // 기록된 N극 방위각 저장
+    };
+
+    // 9개 측정 지점 좌표 (아크릴 판 X-Z 평면 위, -Z가 북쪽/위쪽)
+    const slotCoords = [
+      { x: 0,    z: -3.2 }, // 0: 상 (12시)
+      { x: 2.3,  z: -2.3 }, // 1: 우상
+      { x: 3.2,  z: 0    }, // 2: 우 (3시)
+      { x: 2.3,  z: 2.3  }, // 3: 우하
+      { x: 0,    z: 3.2  }, // 4: 하 (6시)
+      { x: -2.3, z: 2.3  }, // 5: 좌하
+      { x: -3.2, z: 0    }, // 6: 좌 (9시)
+      { x: -2.3, z: -2.3 }, // 7: 좌상
+      { x: 0,    z: 0    }  // 8: 코일 정중앙
+    ];
+
+    let scene, camera, renderer;
+    let boardMesh, movableCompass, compassNeedleGroup, currentArrowGroup, xrayGroup;
+    let xrayArrowList = [];
+    let currentParticles = [];
+    let slotMeshes = [];
+    let recordedArrowMeshes = new Array(9).fill(null);
+    let currentCompassYaw = 0;
+
+    // 카메라 Orbit 및 Raycaster 상태
+    const camOrbit = {
+      theta: 0.35,
+      phi: 0.78,
+      radius: 13.5,
+      targetTheta: 0.35,
+      targetPhi: 0.78
+    };
+
+    const raycaster = new THREE.Raycaster();
+    const pointerNDC = new THREE.Vector2();
+    const boardPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.15);
+    let dragMode = null; // 'compass' | 'camera'
+    let prevMouse = { x: 0, y: 0 };
+
+    // 3D 원형 코일이 만드는 자기장 벡터 (X-Z 평면, -Z가 북쪽/위쪽)
+    function computeLabField3D(x, z) {
+      if (!labState.powerOn) {
+        return { bx: 0, bz: -1 };
+      }
+
+      const R = 1.85; // 코일 반지름 (Z축 방향 -1.85 ~ +1.85)
+      
+      // 3번(우, x=3.2, z=0), 7번(좌, x=-3.2, z=0), 9번(중앙, x=0, z=0)은
+      // 모두 코일 중심축(z=0) 선상에 있으므로 자기력선과 동일하게 셋 다 같은 방향을 가리킴
+      if (Math.abs(z) < 0.25) {
+        return { bx: -labState.currentDir * labState.currentStrength, bz: 0 };
+      }
+
+      const dzFront = z - (-R);
+      const r2Front = Math.max(x * x + dzFront * dzFront, 0.04);
+      const dzBack = z - R;
+      const r2Back = Math.max(x * x + dzBack * dzBack, 0.04);
+
+      // 원형 코일 자기장 유선(Streamline)과 동일한 벡터 방향 계산
+      const bx = ((dzFront / r2Front) - (dzBack / r2Back)) * labState.currentDir;
+      const bz = ((-x / r2Front) + (x / r2Back)) * labState.currentDir;
+
+      const scale = labState.currentStrength * 1.4;
+      return {
+        bx: bx * scale,
+        bz: bz * scale
+      };
+    }
+
+    function createTextSprite(text, colorStr) {
+      const c = document.createElement('canvas');
+      c.width = 256;
+      c.height = 128;
+      const ctx = c.getContext('2d');
+      ctx.font = '900 54px "Noto Sans KR", sans-serif';
+      ctx.fillStyle = colorStr;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, 128, 64);
+
+      const tex = new THREE.CanvasTexture(c);
+      const mat = new THREE.SpriteMaterial({ map: tex, transparent: true });
+      const sprite = new THREE.Sprite(mat);
+      sprite.scale.set(1.8, 0.9, 1);
+      return sprite;
+    }
+
+    function buildArrowMesh3D(colorHex, length = 1.05) {
+      const group = new THREE.Group();
+      const mat = new THREE.MeshStandardMaterial({
+        color: colorHex,
+        emissive: colorHex,
+        emissiveIntensity: 0.35,
+        roughness: 0.3
+      });
+
+      const shaftLen = length * 0.65;
+      const headLen = length * 0.35;
+
+      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, shaftLen, 12), mat);
+      shaft.rotation.x = -Math.PI / 2;
+      shaft.position.z = -shaftLen / 2;
+      group.add(shaft);
+
+      const head = new THREE.Mesh(new THREE.ConeGeometry(0.15, headLen, 16), mat);
+      head.rotation.x = -Math.PI / 2;
+      head.position.z = -shaftLen - headLen / 2;
+      group.add(head);
+
+      return group;
+    }
+
+    function initLab3D() {
+      const container = document.getElementById('lab-3d-container');
+      const w = container.clientWidth || 640;
+      const h = container.clientHeight || 500;
+
+      scene = new THREE.Scene();
+
+      camera = new THREE.PerspectiveCamera(42, w / h, 0.1, 100);
+      updateCameraPosition();
+
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setSize(w, h);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      container.appendChild(renderer.domElement);
+
+      // 조명 설정
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.72);
+      scene.add(ambientLight);
+
+      const dirLight = new THREE.DirectionalLight(0xffffff, 0.95);
+      dirLight.position.set(6, 14, 8);
+      scene.add(dirLight);
+
+      const rimLight = new THREE.DirectionalLight(0x38bdf8, 0.45);
+      rimLight.position.set(-8, 5, -8);
+      scene.add(rimLight);
+
+      // 1. 투명 아크릴 실험판 & 모눈 그리드
+      const boardGeo = new THREE.BoxGeometry(9.6, 0.16, 9.6);
+      const boardMat = new THREE.MeshPhysicalMaterial({
+        color: 0x1e293b,
+        transparent: true,
+        opacity: 0.78,
+        roughness: 0.25,
+        metalness: 0.1
+      });
+      boardMesh = new THREE.Mesh(boardGeo, boardMat);
+      boardMesh.position.y = 0;
+      scene.add(boardMesh);
+
+      const gridHelper = new THREE.GridHelper(9.2, 12, 0x475569, 0x334155);
+      gridHelper.position.y = 0.09;
+      scene.add(gridHelper);
+
+      // 방위 N 표시 (북쪽 = -Z)
+      const northLabel = createTextSprite('N (북)', '#fb7185');
+      northLabel.position.set(0, 0.25, -4.35);
+      scene.add(northLabel);
+
+      // 2. 입체 구리 원형 코일 (아크릴 판 위쪽 반원 + 아래쪽 반원)
+      const R = 1.85;
+      const topCoilGeo = new THREE.TorusGeometry(R, 0.11, 16, 48, Math.PI);
+      const topCoilMat = new THREE.MeshStandardMaterial({
+        color: 0xf97316,
+        emissive: 0x9a3412,
+        emissiveIntensity: 0.3,
+        metalness: 0.65,
+        roughness: 0.25
+      });
+      const topCoil = new THREE.Mesh(topCoilGeo, topCoilMat);
+      topCoil.rotation.y = Math.PI / 2;
+      topCoil.position.y = 0.08;
+      scene.add(topCoil);
+
+      const botCoilGeo = new THREE.TorusGeometry(R, 0.095, 16, 48, Math.PI);
+      const botCoilMat = new THREE.MeshStandardMaterial({
+        color: 0x7c2d12,
+        transparent: true,
+        opacity: 0.55,
+        metalness: 0.5,
+        roughness: 0.4
+      });
+      const botCoil = new THREE.Mesh(botCoilGeo, botCoilMat);
+      botCoil.rotation.y = Math.PI / 2;
+      botCoil.rotation.z = Math.PI;
+      botCoil.position.y = 0.08;
+      scene.add(botCoil);
+
+      // 코일 관통 구멍 링 2개
+      [-R, R].forEach(zPos => {
+        const holeRing = new THREE.Mesh(
+          new THREE.RingGeometry(0.11, 0.22, 24),
+          new THREE.MeshBasicMaterial({ color: 0xfbbf24, side: THREE.DoubleSide })
+        );
+        holeRing.rotation.x = -Math.PI / 2;
+        holeRing.position.set(0, 0.095, zPos);
+        scene.add(holeRing);
+      });
+
+      // 코일 위쪽 전류 방향 화살표 가이드
+      currentArrowGroup = buildArrowMesh3D(0xfbbf24, 1.5);
+      currentArrowGroup.position.set(0, R + 0.35, 0.75);
+      currentArrowGroup.visible = false;
+      scene.add(currentArrowGroup);
+
+      // 전류 흐름 입자 (코일을 따라 순환)
+      const pGeo = new THREE.SphereGeometry(0.085, 10, 10);
+      const pMat = new THREE.MeshBasicMaterial({ color: 0xfef08a });
+      for (let i = 0; i < 12; i++) {
+        const pMesh = new THREE.Mesh(pGeo, pMat);
+        pMesh.visible = false;
+        scene.add(pMesh);
+        currentParticles.push({ mesh: pMesh, phase: i / 12 });
+      }
+
+      // 3. 9개 측정 지점 빈 동그라미 슬롯 생성
+      slotCoords.forEach((sc) => {
+        const ringGeo = new THREE.RingGeometry(0.42, 0.50, 32);
+        const ringMat = new THREE.MeshBasicMaterial({ color: 0x94a3b8, side: THREE.DoubleSide });
+        const ring = new THREE.Mesh(ringGeo, ringMat);
+        ring.rotation.x = -Math.PI / 2;
+        ring.position.set(sc.x, 0.105, sc.z);
+        scene.add(ring);
+
+        const discGeo = new THREE.CircleGeometry(0.42, 32);
+        const discMat = new THREE.MeshBasicMaterial({
+          color: 0x0f172a,
+          transparent: true,
+          opacity: 0.45
+        });
+        const disc = new THREE.Mesh(discGeo, discMat);
+        disc.rotation.x = -Math.PI / 2;
+        disc.position.set(sc.x, 0.10, sc.z);
+        scene.add(disc);
+
+        slotMeshes.push({ ring, disc });
+      });
+
+      // 4. 이동식 3D 나침반 및 N극 방향 화살표 조립
+      movableCompass = new THREE.Group();
+      movableCompass.position.set(2.9, 0.15, 2.9);
+
+      const caseMesh = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.56, 0.60, 0.16, 32),
+        new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.5, roughness: 0.3 })
+      );
+      movableCompass.add(caseMesh);
+
+      const dialMesh = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.48, 0.48, 0.17, 32),
+        new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.4 })
+      );
+      movableCompass.add(dialMesh);
+
+      compassNeedleGroup = new THREE.Group();
+      compassNeedleGroup.position.y = 0.12;
+
+      const nNeedle = new THREE.Mesh(
+        new THREE.ConeGeometry(0.11, 0.42, 4),
+        new THREE.MeshStandardMaterial({ color: 0xef4444, emissive: 0x991b1b, emissiveIntensity: 0.3 })
+      );
+      nNeedle.rotation.x = -Math.PI / 2;
+      nNeedle.position.z = -0.21;
+      compassNeedleGroup.add(nNeedle);
+
+      const sNeedle = new THREE.Mesh(
+        new THREE.ConeGeometry(0.11, 0.42, 4),
+        new THREE.MeshStandardMaterial({ color: 0x3b82f6, emissive: 0x1e3a8a, emissiveIntensity: 0.3 })
+      );
+      sNeedle.rotation.x = Math.PI / 2;
+      sNeedle.position.z = 0.21;
+      compassNeedleGroup.add(sNeedle);
+
+      const guideArrow = buildArrowMesh3D(0xf43f5e, 0.95);
+      guideArrow.position.set(0, 0.08, -0.35);
+      compassNeedleGroup.add(guideArrow);
+
+      movableCompass.add(compassNeedleGroup);
+      scene.add(movableCompass);
+
+      // 5. 3D 자기력선 투시경 그룹 생성
+      xrayGroup = new THREE.Group();
+      xrayGroup.visible = false;
+      scene.add(xrayGroup);
+      buildXrayFieldLines3D();
+
+      // 포인터 이벤트 연결
+      setupLabPointerEvents(renderer.domElement);
+    }
+
+    // 3D 자기력선 투시경 루프 및 방향 화살표 생성 (교과서 원형 코일 자기력선 패턴)
+    function buildXrayFieldLines3D() {
+      xrayArrowList = [];
+      const R = 1.85;
+      const lineMat = new THREE.LineBasicMaterial({
+        color: 0x38bdf8,
+        transparent: true,
+        opacity: 0.78
+      });
+      const coneGeo = new THREE.ConeGeometry(0.10, 0.26, 12);
+      const coneMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
+
+      const getIdealFieldDir = (x, z) => {
+        const dzFront = z - (-R);
+        const r2Front = Math.max(x * x + dzFront * dzFront, 0.04);
+        const dzBack = z - R;
+        const r2Back = Math.max(x * x + dzBack * dzBack, 0.04);
+
+        const bx = (dzFront / r2Front) - (dzBack / r2Back);
+        const bz = (-x / r2Front) + (x / r2Back);
+        const len = Math.hypot(bx, bz) || 1;
+        return { ux: bx / len, uz: bz / len };
+      };
+
+      const addCurveWithArrows = (pts, arrowRatios) => {
+        if (pts.length < 4) return;
+        const geo = new THREE.BufferGeometry().setFromPoints(pts);
+        xrayGroup.add(new THREE.Line(geo, lineMat));
+
+        arrowRatios.forEach(ratio => {
+          const idx = Math.floor(ratio * (pts.length - 2));
+          const p1 = pts[idx];
+          const p2 = pts[idx + 1];
+          const tx = p2.x - p1.x;
+          const tz = p2.z - p1.z;
+          const len = Math.hypot(tx, tz);
+          if (len > 0.0001) {
+            const arrowCone = new THREE.Mesh(coneGeo, coneMat);
+            arrowCone.position.set(p1.x, 0.145, p1.z);
+            xrayGroup.add(arrowCone);
+            xrayArrowList.push({
+              mesh: arrowCone,
+              baseTx: tx / len,
+              baseTz: tz / len
+            });
+          }
+        });
+      };
+
+      const centerPts = [];
+      for (let i = 0; i <= 40; i++) {
+        const x = 4.2 - (i / 40) * 8.4;
+        centerPts.push(new THREE.Vector3(x, 0.135, 0));
+      }
+      addCurveWithArrows(centerPts, [0.22, 0.50, 0.78]);
+
+      const traceClosedStreamline = (startX, startZ) => {
+        const pts = [new THREE.Vector3(startX, 0.135, startZ)];
+        let cx = startX;
+        let cz = startZ;
+        const ds = 0.06;
+        for (let step = 0; step < 360; step++) {
+          const k1 = getIdealFieldDir(cx, cz);
+          const k2 = getIdealFieldDir(cx + k1.ux * ds * 0.5, cz + k1.uz * ds * 0.5);
+          cx += k2.ux * ds;
+          cz += k2.uz * ds;
+          pts.push(new THREE.Vector3(cx, 0.135, cz));
+          if (step > 25 && Math.hypot(cx - startX, cz - startZ) < ds * 1.1) {
+            pts.push(new THREE.Vector3(startX, 0.135, startZ));
+            break;
+          }
+        }
+        return pts;
+      };
+
+      [0.42, 0.85, 1.25].forEach((offset, idx) => {
+        const ratios = idx === 0 ? [0.25, 0.75] : [0.18, 0.50, 0.82];
+        const topLoop = traceClosedStreamline(0, -R + offset);
+        addCurveWithArrows(topLoop, ratios);
+
+        const botLoop = traceClosedStreamline(0, R - offset);
+        addCurveWithArrows(botLoop, ratios);
+      });
+
+      const traceOpenStreamline = (midZ) => {
+        const forwardPts = [];
+        let fx = 0, fz = midZ;
+        const ds = 0.07;
+        for (let s = 0; s < 150; s++) {
+          const k1 = getIdealFieldDir(fx, fz);
+          const k2 = getIdealFieldDir(fx + k1.ux * ds * 0.5, fz + k1.uz * ds * 0.5);
+          fx += k2.ux * ds;
+          fz += k2.uz * ds;
+          if (Math.abs(fx) > 4.3 || Math.abs(fz) > 4.3) break;
+          forwardPts.push(new THREE.Vector3(fx, 0.135, fz));
+        }
+
+        const backwardPts = [];
+        let bx = 0, bz = midZ;
+        for (let s = 0; s < 150; s++) {
+          const k1 = getIdealFieldDir(bx, bz);
+          const k2 = getIdealFieldDir(bx - k1.ux * ds * 0.5, bz - k1.uz * ds * 0.5);
+          bx -= k2.ux * ds;
+          bz -= k2.uz * ds;
+          if (Math.abs(bx) > 4.3 || Math.abs(bz) > 4.3) break;
+          backwardPts.unshift(new THREE.Vector3(bx, 0.135, bz));
+        }
+
+        return [...backwardPts, new THREE.Vector3(0, 0.135, midZ), ...forwardPts];
+      };
+
+      [0.24, 0.44].forEach(midOffset => {
+        const topOuter = traceOpenStreamline(-midOffset);
+        addCurveWithArrows(topOuter, [0.22, 0.50, 0.78]);
+
+        const botOuter = traceOpenStreamline(midOffset);
+        addCurveWithArrows(botOuter, [0.22, 0.50, 0.78]);
+      });
+
+      updateXrayArrowsDirection();
+    }
+
+    function updateXrayArrowsDirection() {
+      xrayArrowList.forEach(item => {
+        const tx = item.baseTx * labState.currentDir;
+        const tz = item.baseTz * labState.currentDir;
+        const tangentVec = new THREE.Vector3(tx, 0, tz).normalize();
+        item.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), tangentVec);
+      });
+    }
+
+    function updateCameraPosition() {
+      if (!camera) return;
+      const x = camOrbit.radius * Math.sin(camOrbit.phi) * Math.sin(camOrbit.theta);
+      const y = camOrbit.radius * Math.cos(camOrbit.phi);
+      const z = camOrbit.radius * Math.sin(camOrbit.phi) * Math.cos(camOrbit.theta);
+      camera.position.set(x, y, z);
+      camera.lookAt(0, 0.2, 0);
+    }
+
+    function resetCameraView(mode) {
+      if (mode === 'top') {
+        camOrbit.targetTheta = 0;
+        camOrbit.targetPhi = 0.04;
+      } else {
+        camOrbit.targetTheta = 0.35;
+        camOrbit.targetPhi = 0.78;
+      }
+    }
+
+    function resizeLab3D() {
+      const container = document.getElementById('lab-3d-container');
+      if (!container || !renderer || !camera) return;
+      const w = container.clientWidth;
+      const h = container.clientHeight;
+      if (w === 0 || h === 0) return;
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+    }
+
+    function setupLabPointerEvents(domEl) {
+      const updateNDC = (clientX, clientY) => {
+        const rect = domEl.getBoundingClientRect();
+        pointerNDC.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+        pointerNDC.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+      };
+
+      const onPointerDown = (clientX, clientY) => {
+        updateNDC(clientX, clientY);
+        raycaster.setFromCamera(pointerNDC, camera);
+        const intersects = raycaster.intersectObjects(movableCompass.children, true);
+
+        if (intersects.length > 0) {
+          dragMode = 'compass';
+        } else {
+          dragMode = 'camera';
+        }
+        prevMouse = { x: clientX, y: clientY };
+      };
+
+      const onPointerMove = (clientX, clientY) => {
+        if (!dragMode) return;
+        if (dragMode === 'compass') {
+          updateNDC(clientX, clientY);
+          raycaster.setFromCamera(pointerNDC, camera);
+          const hitPoint = new THREE.Vector3();
+          if (raycaster.ray.intersectPlane(boardPlane, hitPoint)) {
+            hitPoint.x = Math.max(-4.1, Math.min(4.1, hitPoint.x));
+            hitPoint.z = Math.max(-4.1, Math.min(4.1, hitPoint.z));
+            movableCompass.position.x = hitPoint.x;
+            movableCompass.position.z = hitPoint.z;
+            checkSlotProximity();
+          }
+        } else if (dragMode === 'camera') {
+          const dx = clientX - prevMouse.x;
+          const dy = clientY - prevMouse.y;
+          camOrbit.targetTheta -= dx * 0.008;
+          camOrbit.targetPhi = Math.max(0.04, Math.min(1.38, camOrbit.targetPhi - dy * 0.008));
+          prevMouse = { x: clientX, y: clientY };
+        }
+      };
+
+      const onPointerUp = () => {
+        if (dragMode === 'compass' && labState.activeSlotIndex !== -1) {
+          const sc = slotCoords[labState.activeSlotIndex];
+          movableCompass.position.x = sc.x;
+          movableCompass.position.z = sc.z;
+        }
+        dragMode = null;
+      };
+
+      domEl.addEventListener('mousedown', (e) => onPointerDown(e.clientX, e.clientY));
+      window.addEventListener('mousemove', (e) => onPointerMove(e.clientX, e.clientY));
+      window.addEventListener('mouseup', onPointerUp);
+
+      domEl.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 1) {
+          onPointerDown(e.touches[0].clientX, e.touches[0].clientY);
+        }
+      }, { passive: true });
+      domEl.addEventListener('touchmove', (e) => {
+        if (e.touches.length === 1 && dragMode) {
+          onPointerMove(e.touches[0].clientX, e.touches[0].clientY);
+        }
+      }, { passive: true });
+      domEl.addEventListener('touchend', onPointerUp);
+    }
+
+    function checkSlotProximity() {
+      let nearestIdx = -1;
+      let minDist = 0.72;
+      slotCoords.forEach((sc, idx) => {
+        const d = Math.hypot(movableCompass.position.x - sc.x, movableCompass.position.z - sc.z);
+        if (d < minDist) {
+          minDist = d;
+          nearestIdx = idx;
+        }
+      });
+      labState.activeSlotIndex = nearestIdx;
+      updateSlotHoverState();
+    }
+
+    function updateSlotHoverState() {
+      slotMeshes.forEach((sm, idx) => {
+        if (idx === labState.activeSlotIndex) {
+          sm.ring.material.color.setHex(0xf43f5e);
+          sm.disc.material.color.setHex(0xf43f5e);
+          sm.disc.material.opacity = 0.35;
+        } else if (labState.recordedSlots[idx] !== null) {
+          sm.ring.material.color.setHex(0x38bdf8);
+          sm.disc.material.color.setHex(0x0f172a);
+          sm.disc.material.opacity = 0.55;
+        } else {
+          sm.ring.material.color.setHex(0x94a3b8);
+          sm.disc.material.color.setHex(0x0f172a);
+          sm.disc.material.opacity = 0.45;
+        }
+      });
+
+      const btn = document.getElementById('btn-record-slot');
+      const txt = document.getElementById('record-btn-text');
+      if (!btn || !txt) return;
+
+      if (labState.activeSlotIndex !== -1) {
+        btn.disabled = false;
+        txt.textContent = `${labState.activeSlotIndex + 1}번 위치 N극 방향 화살표 기록!`;
+      } else {
+        btn.disabled = true;
+        txt.textContent = '빈 원 위에 나침반을 놓으세요';
+      }
+    }
+
+    function recordCurrentSlot() {
+      const idx = labState.activeSlotIndex;
+      if (idx === -1) return;
+
+      const sc = slotCoords[idx];
+      const f = computeLabField3D(sc.x, sc.z);
+      const yaw = Math.atan2(-f.bx, -f.bz);
+      labState.recordedSlots[idx] = yaw;
+
+      if (recordedArrowMeshes[idx]) {
+        scene.remove(recordedArrowMeshes[idx]);
+      }
+
+      const arrow = buildArrowMesh3D(0xf43f5e, 0.92);
+      arrow.position.set(sc.x, 0.13, sc.z);
+      arrow.rotation.y = yaw;
+      scene.add(arrow);
+      recordedArrowMeshes[idx] = arrow;
+
+      const count = labState.recordedSlots.filter(v => v !== null).length;
+      document.getElementById('recorded-count-badge').textContent = `${count} / 9`;
+      updateSlotHoverState();
+    }
+
+    function clearAllRecordedSlots() {
+      for (let i = 0; i < 9; i++) {
+        labState.recordedSlots[i] = null;
+        if (recordedArrowMeshes[i]) {
+          scene.remove(recordedArrowMeshes[i]);
+          recordedArrowMeshes[i] = null;
+        }
+      }
+      document.getElementById('recorded-count-badge').textContent = '0 / 9';
+      updateSlotHoverState();
+    }
+
+    /* ==========================================================================
+       3. 탭 1 UI 조작 핸들러 (스위치, 전류 방향, 투시경)
+       ========================================================================== */
+    function togglePower() {
+      labState.powerOn = !labState.powerOn;
+      const btn = document.getElementById('btn-power');
+      const ind = document.getElementById('power-indicator');
+      const lbl = document.getElementById('power-label');
+      const statusTxt = document.getElementById('lab-status-text');
+
+      if (labState.powerOn) {
+        btn.className = 'px-4 py-2 rounded-xl font-extrabold text-sm transition-all bg-rose-500 text-white border border-rose-400 hover:bg-rose-400 flex items-center gap-2 shadow-lg shadow-rose-500/30';
+        ind.className = 'w-3 h-3 rounded-full bg-white animate-pulse';
+        lbl.textContent = '스위치 ON';
+        statusTxt.textContent = `전원 ON · 전류 ${labState.currentDir === 1 ? '위쪽(↑)' : '아래쪽(↓)'} 흐르는 중`;
+        statusTxt.className = 'text-rose-400 font-extrabold';
+      } else {
+        btn.className = 'px-4 py-2 rounded-xl font-extrabold text-sm transition-all bg-slate-700 text-slate-300 border border-slate-600 hover:bg-slate-600 flex items-center gap-2 shadow';
+        ind.className = 'w-3 h-3 rounded-full bg-slate-400';
+        lbl.textContent = '스위치 OFF';
+        statusTxt.textContent = '전원 OFF';
+        statusTxt.className = 'text-amber-400';
+      }
+    }
+
+    function setCurrentDir(dir) {
+      labState.currentDir = dir;
+      const btnUp = document.getElementById('btn-dir-up');
+      const btnDown = document.getElementById('btn-dir-down');
+
+      if (dir === 1) {
+        btnUp.className = 'py-2.5 px-3 rounded-xl font-bold text-sm transition-all bg-rose-500/20 border-2 border-rose-500 text-rose-300 flex items-center justify-center gap-1.5';
+        btnDown.className = 'py-2.5 px-3 rounded-xl font-bold text-sm transition-all bg-slate-800 border border-slate-700 text-slate-400 hover:text-white flex items-center justify-center gap-1.5';
+      } else {
+        btnDown.className = 'py-2.5 px-3 rounded-xl font-bold text-sm transition-all bg-sky-500/20 border-2 border-sky-500 text-sky-300 flex items-center justify-center gap-1.5';
+        btnUp.className = 'py-2.5 px-3 rounded-xl font-bold text-sm transition-all bg-slate-800 border border-slate-700 text-slate-400 hover:text-white flex items-center justify-center gap-1.5';
+      }
+
+      updateXrayArrowsDirection();
+
+      if (labState.powerOn) {
+        document.getElementById('lab-status-text').textContent =
+          `전원 ON · 전류 ${labState.currentDir === 1 ? '위쪽(↑)' : '아래쪽(↓)'} 흐르는 중`;
+      }
+    }
+
+    function toggleXray() {
+      labState.xrayOn = !labState.xrayOn;
+      if (xrayGroup) xrayGroup.visible = labState.xrayOn;
+      const btn = document.getElementById('btn-xray');
+      const badge = document.getElementById('xray-badge');
+      if (labState.xrayOn) {
+        btn.className = 'w-full py-2.5 px-3.5 rounded-xl text-sm font-bold transition-all bg-sky-500/20 border border-sky-500 text-sky-300 flex items-center justify-between';
+        badge.textContent = 'ON';
+        badge.className = 'text-xs bg-sky-500 text-slate-950 px-2 py-0.5 rounded-md font-extrabold';
+      } else {
+        btn.className = 'w-full py-2.5 px-3.5 rounded-xl text-sm font-bold transition-all bg-slate-900/80 border border-slate-700 text-slate-300 hover:border-sky-500/50 flex items-center justify-between';
+        badge.textContent = 'OFF';
+        badge.className = 'text-xs bg-slate-700 text-slate-300 px-2 py-0.5 rounded-md font-extrabold';
+      }
+    }
+
+    function renderLab3D() {
+      if (currentTab !== 'lab' || !renderer || !scene || !camera) return;
+
+      camOrbit.theta += (camOrbit.targetTheta - camOrbit.theta) * 0.12;
+      camOrbit.phi += (camOrbit.targetPhi - camOrbit.phi) * 0.12;
+      updateCameraPosition();
+
+      const f = computeLabField3D(movableCompass.position.x, movableCompass.position.z);
+      const targetYaw = Math.atan2(-f.bx, -f.bz);
+      currentCompassYaw = lerpAngle(currentCompassYaw, targetYaw, 0.18);
+      compassNeedleGroup.rotation.y = currentCompassYaw;
+
+      if (currentArrowGroup) {
+        currentArrowGroup.visible = labState.powerOn;
+        currentArrowGroup.rotation.y = labState.currentDir === 1 ? 0 : Math.PI;
+      }
+
+      const R = 1.85;
+      currentParticles.forEach(pObj => {
+        pObj.mesh.visible = labState.powerOn;
+        if (labState.powerOn) {
+          pObj.phase = (pObj.phase + 0.004 * labState.currentStrength * labState.currentDir + 1) % 1;
+          const angle = pObj.phase * Math.PI * 2;
+          pObj.mesh.position.set(0, 0.08 + Math.sin(angle) * R, Math.cos(angle) * R);
+        }
+      });
+
+      renderer.render(scene, camera);
+    }
+
+    /* ==========================================================================
+       4. 탭 2: 자기장 서핑! 나침반 탐사선 골인 미션 (코일 추가·드래그 퍼즐)
+       ========================================================================== */
+    const gameCanvas = document.getElementById('gameCanvas');
+    const gameCtx = gameCanvas.getContext('2d');
+
+    const MAX_SURF_COILS = 6; // 모든 단계에서 최대 6개까지 코일 추가 가능
+
+    function getSurfRadii(w, h, strength = 2.3) {
+      const minDim = Math.min(w, h);
+      const strengthRatio = strength / 2.3; // 약(1.5) -> 0.65배, 중(2.3) -> 1.0배, 강(3.2) -> 1.39배
+      return {
+        coilRadius: minDim * 0.082,
+        maxFieldRange: minDim * 0.285 * (0.72 + 0.28 * strengthRatio)
+      };
+    }
+
+    // 2D 탑뷰 코일 자기장 계산 (유효 반경 내 감쇠 및 교과서 동일 방향)
+    function calculateSurfCoilField(px, py, cx, cy, coilRadius, maxRange, currentDir, strength) {
+      const distCenter = Math.hypot(px - cx, py - cy);
+      if (distCenter >= maxRange) {
+        return { bx: 0, by: 0 };
+      }
+
+      // 유효 범위 경계에서 자연스럽게 0으로 줄어드는 감쇠 계수
+      const falloff = Math.pow(1 - distCenter / maxRange, 1.35);
+
+      const topY = cy - coilRadius;
+      const botY = cy + coilRadius;
+
+      const dxTop = px - cx;
+      const dyTop = py - topY;
+      const r2Top = Math.max(dxTop * dxTop + dyTop * dyTop, 320);
+
+      const dxBot = px - cx;
+      const dyBot = py - botY;
+      const r2Bot = Math.max(dxBot * dxBot + dyBot * dyBot, 320);
+
+      // dir = 1 (위쪽/북쪽 전류): topY에서 시계방향, botY에서 반시계방향 회전
+      const bxTop = (-dyTop / r2Top) * currentDir;
+      const byTop = (dxTop / r2Top) * currentDir;
+
+      const bxBot = (dyBot / r2Bot) * currentDir;
+      const byBot = (-dxBot / r2Bot) * currentDir;
+
+      const scale = strength * 3200 * falloff;
+      return {
+        bx: (bxTop + bxBot) * scale,
+        by: (byTop + byBot) * scale
+      };
+    }
+
+    // 5단계 스테이지 설계
+    const surfStages = {
+      1: {
+        title: '1단계: 탐사선 직진 워밍업',
+        desc: '전류가 흐르지 않으면 나침반의 N극(빨간 앞머리)은 항상 북쪽(↑)을 가리킵니다. [탐사선 출발!]을 눌러보세요!',
+        start: { rx: 0.50, ry: 0.82 },
+        goal: { rx: 0.50, ry: 0.18 },
+        initialCoils: [],
+        walls: [
+          { rx: 0.22, ry: 0.50, rw: 0.16, rh: 0.05 },
+          { rx: 0.78, ry: 0.50, rw: 0.16, rh: 0.05 }
+        ],
+        concept: '전류가 흐르지 않을 때는 나침반의 N극(탐사선 앞머리)이 항상 북쪽(위쪽)을 가리키며 직진합니다!'
+      },
+      2: {
+        title: '2단계: 남쪽(아래쪽) 골인 지점으로 유턴하기',
+        desc: '이번엔 골인 깃발이 정반대인 남쪽(아래쪽)에 있습니다! 코일의 위치를 옮기고 전류를 켜서 둥근 자기장 물결을 타고 아래로 유턴해 보세요.',
+        start: { rx: 0.38, ry: 0.42 },
+        goal: { rx: 0.64, ry: 0.78 },
+        initialCoils: [
+          { id: 1, label: '코일 A', rx: 0.50, ry: 0.34, powerOn: false, dir: 1, strength: 2.3 }
+        ],
+        walls: [],
+        concept: '코일 주위에는 둥글게 휘어지는 자기장이 만들어집니다! 코일 양옆 바깥쪽에서는 자기장 방향이 아래쪽(남쪽)을 향하므로 탐사선을 유턴시킬 수 있습니다.'
+      },
+      3: {
+        title: '3단계: 장애물 1개 돌아서 골인하기',
+        desc: '앞길을 막는 장애물이 1개 있습니다! 코일을 배치하고 전류를 켜서 자기장 물결을 타고 오른쪽 골인 깃발로 꺾어보세요.',
+        start: { rx: 0.36, ry: 0.84 },
+        goal: { rx: 0.78, ry: 0.34 },
+        initialCoils: [
+          { id: 1, label: '코일 A', rx: 0.36, ry: 0.48, powerOn: false, dir: 1, strength: 2.3 }
+        ],
+        walls: [
+          { rx: 0.36, ry: 0.24, rw: 0.34, rh: 0.05 }
+        ],
+        concept: '코일에 전류가 흐르면 주위에 둥근 자기장이 생깁니다! 코일을 원하는 위치에 배치하고 자기장 세기를 조절하면 경로를 휘게 만들 수 있습니다.'
+      },
+      4: {
+        title: '4단계: 2개의 장애물 사이 좁은 길 통과하기',
+        desc: '장애물이 2개로 늘었습니다! 코일의 위치와 [전류 방향], 그리고 [자기장 세기(약/중/강)]를 조절해 두 장애물 사이를 통과해 보세요.',
+        start: { rx: 0.72, ry: 0.85 },
+        goal: { rx: 0.24, ry: 0.22 },
+        initialCoils: [
+          { id: 1, label: '코일 A', rx: 0.72, ry: 0.54, powerOn: true, dir: 1, strength: 2.3 }
+        ],
+        walls: [
+          { rx: 0.72, ry: 0.32, rw: 0.34, rh: 0.05 },
+          { rx: 0.34, ry: 0.62, rw: 0.34, rh: 0.05 }
+        ],
+        concept: '전류의 방향이 바뀌면 자기장 방향이 반대가 되고, 자기장의 세기를 조절하면 휘어지는 각도와 유효 범위를 정밀하게 맞출 수 있습니다!'
+      },
+      5: {
+        title: '5단계: S자 더블 장애물 돌파 미션',
+        desc: '2개의 큰 장애물이 지그재그로 가로막고 있습니다! [➕ 코일 추가]로 여러 코일을 배치하고 각각의 방향과 세기를 조합해 골인하세요.',
+        start: { rx: 0.22, ry: 0.86 },
+        goal: { rx: 0.80, ry: 0.16 },
+        initialCoils: [
+          { id: 1, label: '코일 A', rx: 0.22, ry: 0.62, powerOn: true, dir: 1, strength: 2.3 }
+        ],
+        walls: [
+          { rx: 0.30, ry: 0.40, rw: 0.44, rh: 0.05 },
+          { rx: 0.70, ry: 0.66, rw: 0.44, rh: 0.05 }
+        ],
+        concept: '완벽합니다! 여러 개의 코일을 배치하고 각 코일의 전류 방향과 자기장 세기를 조합하면 복잡한 장애물 코스도 통과하는 자기장 고속도로를 만들 수 있습니다.'
+      }
+    };
+
+    const coilNames = ['코일 A', '코일 B', '코일 C', '코일 D', '코일 E', '코일 F'];
+
+    const gameState = {
+      initialized: false,
+      currentStage: 1,
+      mode: 'planning', // 'planning' | 'running' | 'crashed' | 'cleared'
+      selectedCoilIdx: -1,
+      draggingCoilIdx: -1,
+      dragStartClient: { x: 0, y: 0 },
+      dragOffset: { dx: 0, dy: 0 },
+      hasDraggedMoved: false,
+      coils: [],
+      probe: {
+        x: 0,
+        y: 0,
+        angle: -Math.PI / 2,
+        speed: 3.1,
+        trail: []
+      },
+      animTick: 0
+    };
+
+    function resizeGameCanvas() {
+      const parent = gameCanvas.parentElement;
+      if (!parent) return;
+      const rect = parent.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      const canvasRect = gameCanvas.getBoundingClientRect();
+      const w = canvasRect.width || rect.width;
+      const h = canvasRect.height || 420;
+      gameCanvas.width = w * dpr;
+      gameCanvas.height = h * dpr;
+      gameCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      if (gameState.mode === 'planning' && gameState.initialized) {
+        const st = surfStages[gameState.currentStage];
+        gameState.probe.x = st.start.rx * w;
+        gameState.probe.y = st.start.ry * h;
+      }
+    }
+
+    function loadStage(num) {
+      gameState.currentStage = num;
+      const st = surfStages[num];
+
+      gameState.coils = st.initialCoils.map(c => ({ ...c }));
+      gameState.selectedCoilIdx = gameState.coils.length > 0 ? 0 : -1;
+      gameState.draggingCoilIdx = -1;
+
+      document.getElementById('stage-badge').textContent = `STAGE ${num} / 5`;
+      document.getElementById('stage-title').textContent = st.title;
+      document.getElementById('stage-desc').textContent = st.desc;
+
+      for (let i = 1; i <= 5; i++) {
+        const b = document.getElementById(`st-btn-${i}`);
+        if (!b) continue;
+        if (i === num) {
+          b.className = 'px-2.5 py-1.5 rounded-lg text-xs font-extrabold bg-amber-500 text-slate-950 transition-all';
+        } else {
+          b.className = 'px-2.5 py-1.5 rounded-lg text-xs font-extrabold text-slate-400 hover:text-white transition-all';
+        }
+      }
+
+      document.getElementById('clear-modal').classList.add('hidden');
+      resetProbe();
+      updateCoilControlUI();
+    }
+
+    function addNewCoil() {
+      if (gameState.coils.length >= MAX_SURF_COILS) return;
+      if (gameState.mode !== 'planning') resetProbe();
+
+      const usedLabels = new Set(gameState.coils.map(c => c.label));
+      const nextLabel = coilNames.find(name => !usedLabels.has(name)) || `코일 ${gameState.coils.length + 1}`;
+      const offsetIdx = gameState.coils.length;
+
+      const newCoil = {
+        id: Date.now() + Math.random(),
+        label: nextLabel,
+        rx: Math.min(0.82, 0.44 + (offsetIdx % 3) * 0.12),
+        ry: Math.min(0.75, 0.44 + Math.floor(offsetIdx / 3) * 0.14),
+        powerOn: true,
+        dir: 1,
+        strength: 2.3
+      };
+
+      gameState.coils.push(newCoil);
+      gameState.selectedCoilIdx = gameState.coils.length - 1;
+      updateCoilControlUI();
+    }
+
+    function removeSelectedCoil() {
+      if (gameState.selectedCoilIdx === -1 || gameState.coils.length === 0) return;
+      if (gameState.mode !== 'planning') resetProbe();
+
+      gameState.coils.splice(gameState.selectedCoilIdx, 1);
+      gameState.selectedCoilIdx = gameState.coils.length > 0 ? gameState.coils.length - 1 : -1;
+      updateCoilControlUI();
+    }
+
+    function resetProbe() {
+      const rect = gameCanvas.getBoundingClientRect();
+      const w = rect.width || 600;
+      const h = rect.height || 420;
+      const st = surfStages[gameState.currentStage];
+
+      gameState.mode = 'planning';
+      gameState.probe.x = st.start.rx * w;
+      gameState.probe.y = st.start.ry * h;
+      gameState.probe.angle = -Math.PI / 2;
+      gameState.probe.trail = [];
+
+      document.getElementById('surf-fail-banner').classList.add('hidden');
+      document.getElementById('surf-status-text').textContent = '코일을 추가·배치하고 출발하세요!';
+      document.getElementById('surf-status-text').className = 'font-extrabold text-sky-400';
+
+      const launchBtn = document.getElementById('btn-surf-launch');
+      launchBtn.disabled = false;
+      launchBtn.className = 'flex-1 sm:flex-initial px-6 py-2.5 rounded-xl bg-gradient-to-r from-rose-500 to-amber-500 hover:from-rose-400 hover:to-amber-400 text-slate-950 font-black text-sm shadow-lg shadow-amber-500/25 transition-all flex items-center justify-center gap-2';
+      document.getElementById('launch-btn-text').textContent = '탐사선 출발!';
+    }
+
+    function launchProbe() {
+      if (gameState.mode === 'running') return;
+      if (gameState.mode === 'crashed' || gameState.mode === 'cleared') {
+        resetProbe();
+      }
+      gameState.mode = 'running';
+      gameState.probe.trail = [{ x: gameState.probe.x, y: gameState.probe.y }];
+
+      document.getElementById('surf-fail-banner').classList.add('hidden');
+      document.getElementById('surf-status-text').textContent = '🚀 탐사선 자기장 서핑 중...';
+      document.getElementById('surf-status-text').className = 'font-extrabold text-amber-400';
+
+      const launchBtn = document.getElementById('btn-surf-launch');
+      launchBtn.disabled = true;
+      launchBtn.className = 'flex-1 sm:flex-initial px-6 py-2.5 rounded-xl bg-slate-700 text-slate-400 font-black text-sm transition-all flex items-center justify-center gap-2 cursor-not-allowed';
+      document.getElementById('launch-btn-text').textContent = '항해 중...';
+    }
+
+    function updateCoilControlUI() {
+      const addBtn = document.getElementById('btn-add-coil');
+      const quotaBadge = document.getElementById('coil-quota-badge');
+      const labelEl = document.getElementById('selected-coil-label');
+      const btnsEl = document.getElementById('coil-action-buttons');
+      const pwrBtn = document.getElementById('btn-surf-power');
+      const dirBtn = document.getElementById('btn-surf-dir');
+
+      const count = gameState.coils.length;
+      quotaBadge.textContent = `${count}/${MAX_SURF_COILS}`;
+      addBtn.disabled = count >= MAX_SURF_COILS;
+
+      if (count === 0 || gameState.selectedCoilIdx === -1) {
+        labelEl.textContent = '코일 없음 ([➕ 코일 추가]로 배치 가능)';
+        btnsEl.classList.add('hidden');
+        return;
+      }
+
+      const coil = gameState.coils[gameState.selectedCoilIdx];
+      labelEl.textContent = `선택됨: ${coil.label}`;
+      btnsEl.classList.remove('hidden');
+
+      if (coil.powerOn) {
+        pwrBtn.textContent = '⚡ 스위치 ON';
+        pwrBtn.className = 'px-3 py-1.5 rounded-lg text-xs font-extrabold border transition-all bg-rose-500 text-white border-rose-400 shadow';
+      } else {
+        pwrBtn.textContent = '스위치 OFF';
+        pwrBtn.className = 'px-3 py-1.5 rounded-lg text-xs font-extrabold border transition-all bg-slate-800 border-slate-600 text-slate-300 hover:text-white';
+      }
+
+      if (coil.dir === 1) {
+        dirBtn.textContent = '전류 방향: 위쪽 (↑)';
+        dirBtn.className = 'px-3 py-1.5 rounded-lg text-xs font-extrabold border transition-all bg-amber-500/20 border-amber-500 text-amber-300';
+      } else {
+        dirBtn.textContent = '전류 방향: 아래쪽 (↓)';
+        dirBtn.className = 'px-3 py-1.5 rounded-lg text-xs font-extrabold border transition-all bg-sky-500/20 border-sky-500 text-sky-300';
+      }
+
+      // 자기장 세기 버튼 하이라이트 업데이트
+      const strMap = [
+        { id: 'btn-str-1', val: 1.5 },
+        { id: 'btn-str-2', val: 2.3 },
+        { id: 'btn-str-3', val: 3.2 }
+      ];
+      strMap.forEach(item => {
+        const b = document.getElementById(item.id);
+        if (!b) return;
+        if (Math.abs(coil.strength - item.val) < 0.1) {
+          b.className = 'px-1.5 py-0.5 rounded text-[11px] font-extrabold bg-sky-500 text-slate-950 transition';
+        } else {
+          b.className = 'px-1.5 py-0.5 rounded text-[11px] font-extrabold text-slate-300 hover:text-white transition';
+        }
+      });
+    }
+
+    function setSelectedCoilStrength(val) {
+      if (gameState.selectedCoilIdx === -1) return;
+      if (gameState.mode !== 'planning') resetProbe();
+      const coil = gameState.coils[gameState.selectedCoilIdx];
+      coil.strength = val;
+      updateCoilControlUI();
+    }
+
+    function toggleSelectedCoilPower() {
+      if (gameState.selectedCoilIdx === -1) return;
+      if (gameState.mode !== 'planning') resetProbe();
+      const coil = gameState.coils[gameState.selectedCoilIdx];
+      coil.powerOn = !coil.powerOn;
+      updateCoilControlUI();
+    }
+
+    function toggleSelectedCoilDir() {
+      if (gameState.selectedCoilIdx === -1) return;
+      if (gameState.mode !== 'planning') resetProbe();
+      const coil = gameState.coils[gameState.selectedCoilIdx];
+      coil.dir *= -1;
+      updateCoilControlUI();
+    }
+
+    // 캔버스 위 원형 코일 드래그 이동 & 짧은 클릭(탭) 시 상태 전환
+    function handleGamePointerDown(clientX, clientY) {
+      if (currentTab !== 'game' || gameState.coils.length === 0) return;
+      const rect = gameCanvas.getBoundingClientRect();
+      const px = clientX - rect.left;
+      const py = clientY - rect.top;
+      const { coilRadius } = getSurfRadii(rect.width, rect.height);
+
+      for (let i = gameState.coils.length - 1; i >= 0; i--) {
+        const c = gameState.coils[i];
+        const cx = c.rx * rect.width;
+        const cy = c.ry * rect.height;
+        if (Math.hypot(px - cx, py - cy) <= coilRadius + 22) {
+          gameState.selectedCoilIdx = i;
+          gameState.draggingCoilIdx = i;
+          gameState.dragStartClient = { x: clientX, y: clientY };
+          gameState.dragOffset = { dx: px - cx, dy: py - cy };
+          gameState.hasDraggedMoved = false;
+          updateCoilControlUI();
+          break;
+        }
+      }
+    }
+
+    function handleGamePointerMove(clientX, clientY) {
+      if (gameState.draggingCoilIdx === -1) return;
+      const dist = Math.hypot(clientX - gameState.dragStartClient.x, clientY - gameState.dragStartClient.y);
+      if (dist > 5) {
+        gameState.hasDraggedMoved = true;
+        if (gameState.mode !== 'planning') resetProbe();
+      }
+      if (!gameState.hasDraggedMoved) return;
+
+      const rect = gameCanvas.getBoundingClientRect();
+      const { coilRadius } = getSurfRadii(rect.width, rect.height);
+      const newCx = Math.max(coilRadius + 16, Math.min(rect.width - coilRadius - 16, clientX - rect.left - gameState.dragOffset.dx));
+      const newCy = Math.max(coilRadius + 24, Math.min(rect.height - coilRadius - 36, clientY - rect.top - gameState.dragOffset.dy));
+
+      const coil = gameState.coils[gameState.draggingCoilIdx];
+      if (coil) {
+        coil.rx = newCx / rect.width;
+        coil.ry = newCy / rect.height;
+      }
+    }
+
+    function handleGamePointerUp() {
+      if (gameState.draggingCoilIdx !== -1) {
+        const idx = gameState.draggingCoilIdx;
+        if (!gameState.hasDraggedMoved && gameState.coils[idx]) {
+          if (gameState.mode !== 'planning') resetProbe();
+          const c = gameState.coils[idx];
+          if (!c.powerOn) {
+            c.powerOn = true;
+            c.dir = 1;
+          } else if (c.dir === 1) {
+            c.dir = -1;
+          } else {
+            c.powerOn = false;
+            c.dir = 1;
+          }
+          updateCoilControlUI();
+        }
+      }
+      gameState.draggingCoilIdx = -1;
+      gameState.hasDraggedMoved = false;
+    }
+
+    gameCanvas.addEventListener('mousedown', (e) => handleGamePointerDown(e.clientX, e.clientY));
+    window.addEventListener('mousemove', (e) => handleGamePointerMove(e.clientX, e.clientY));
+    window.addEventListener('mouseup', handleGamePointerUp);
+
+    gameCanvas.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 1) {
+        handleGamePointerDown(e.touches[0].clientX, e.touches[0].clientY);
+      }
+    }, { passive: true });
+    gameCanvas.addEventListener('touchmove', (e) => {
+      if (e.touches.length === 1 && gameState.draggingCoilIdx !== -1) {
+        handleGamePointerMove(e.touches[0].clientX, e.touches[0].clientY);
+      }
+    }, { passive: true });
+    gameCanvas.addEventListener('touchend', handleGamePointerUp);
+
+    // 게임 맵 전체 자기장 벡터 계산 (코일 유효 범위 내부일 때만 자기장 벡터 반환, 범위 밖이면 null)
+    function getSurfFieldAt(px, py, w, h) {
+      const activeCoils = gameState.coils.filter(c => c.powerOn);
+      if (activeCoils.length === 0) {
+        return null;
+      }
+
+      let insideAny = false;
+      let bx = 0;
+      let by = 0;
+
+      activeCoils.forEach(c => {
+        const cx = c.rx * w;
+        const cy = c.ry * h;
+        const { coilRadius, maxFieldRange } = getSurfRadii(w, h, c.strength);
+        if (Math.hypot(px - cx, py - cy) < maxFieldRange) {
+          insideAny = true;
+          const cf = calculateSurfCoilField(px, py, cx, cy, coilRadius, maxFieldRange, c.dir, c.strength);
+          bx += cf.bx;
+          by += cf.by;
+        }
+      });
+
+      if (!insideAny || Math.hypot(bx, by) < 0.001) {
+        return null;
+      }
+      return { bx, by };
+    }
+
+    function onSurfCrash(reason) {
+      gameState.mode = 'crashed';
+      document.getElementById('surf-fail-msg').textContent = reason;
+      document.getElementById('surf-fail-banner').classList.remove('hidden');
+      document.getElementById('surf-status-text').textContent = '💥 항해 실패! 코일 위치나 설정을 수정해 보세요.';
+      document.getElementById('surf-status-text').className = 'font-extrabold text-rose-400';
+
+      const launchBtn = document.getElementById('btn-surf-launch');
+      launchBtn.disabled = false;
+      launchBtn.className = 'flex-1 sm:flex-initial px-6 py-2.5 rounded-xl bg-rose-500 hover:bg-rose-400 text-white font-black text-sm shadow-lg transition-all flex items-center justify-center gap-2';
+      document.getElementById('launch-btn-text').textContent = '↺ 다시 출발하기';
+    }
+
+    function onSurfClear() {
+      gameState.mode = 'cleared';
+      const st = surfStages[gameState.currentStage];
+      document.getElementById('surf-status-text').textContent = '🏆 미션 클리어!';
+      document.getElementById('surf-status-text').className = 'font-extrabold text-emerald-400';
+
+      document.getElementById('modal-badge').textContent = `STAGE ${gameState.currentStage} CLEAR!`;
+      document.getElementById('modal-title').textContent =
+        gameState.currentStage === 5 ? '🎉 전류와 자기장 마스터 등극!' : '✨ 나침반 탐사선 골인 성공!';
+      document.getElementById('modal-concept').textContent = st.concept;
+
+      const nextBtn = document.getElementById('modal-next-btn');
+      nextBtn.textContent = gameState.currentStage < 5 ? '다음 스테이지 →' : '1단계부터 다시하기 ↻';
+      document.getElementById('clear-modal').classList.remove('hidden');
+    }
+
+    function closeModalAndReplay() {
+      loadStage(gameState.currentStage);
+    }
+
+    function goNextStage() {
+      const next = gameState.currentStage < 5 ? gameState.currentStage + 1 : 1;
+      loadStage(next);
+    }
+
+    // 나침반 탐사선 그리기
+    function drawCompassProbe(ctx, x, y, angle, tick) {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(angle);
+
+      if (gameState.mode === 'running') {
+        const flameLen = 14 + Math.sin(tick * 0.6) * 5;
+        ctx.beginPath();
+        ctx.moveTo(-18, -5);
+        ctx.lineTo(-18 - flameLen, 0);
+        ctx.lineTo(-18, 5);
+        ctx.closePath();
+        ctx.fillStyle = '#38bdf8';
+        ctx.fill();
+      }
+
+      ctx.beginPath();
+      ctx.arc(0, 0, 18, 0, Math.PI * 2);
+      ctx.fillStyle = '#f8fafc';
+      ctx.fill();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#38bdf8';
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(26, 0);
+      ctx.lineTo(2, -10);
+      ctx.lineTo(6, 0);
+      ctx.lineTo(2, 10);
+      ctx.closePath();
+      ctx.fillStyle = '#ef4444';
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.moveTo(-15, 0);
+      ctx.lineTo(0, -6);
+      ctx.lineTo(0, 6);
+      ctx.closePath();
+      ctx.fillStyle = '#3b82f6';
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(0, 0, 3.5, 0, Math.PI * 2);
+      ctx.fillStyle = '#0f172a';
+      ctx.fill();
+
+      ctx.restore();
+    }
+
+    // 게임 맵용 2D 세로 원형 코일 그리기 (축소된 크기 반영)
+    function drawSurfCoil(ctx, cx, cy, radius, coil, isSelected, animOffset) {
+      ctx.save();
+
+      if (isSelected) {
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius + 12, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(251, 191, 36, 0.65)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 4]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      // 뒤쪽 반원 코일
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, radius * 0.25, radius, 0, Math.PI * 0.5, Math.PI * 1.5);
+      ctx.lineWidth = 7;
+      ctx.strokeStyle = coil.powerOn ? '#9a3412' : '#475569';
+      ctx.stroke();
+
+      // 앞쪽 반원 코일
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, radius * 0.25, radius, 0, -Math.PI * 0.5, Math.PI * 0.5);
+      ctx.lineWidth = 8.5;
+      ctx.strokeStyle = coil.powerOn ? '#f97316' : '#64748b';
+      ctx.stroke();
+
+      if (coil.powerOn) {
+        const arrowX = cx + radius * 0.46;
+        const arrowTop = cy - radius * 0.52;
+        const arrowBot = cy + radius * 0.52;
+
+        ctx.shadowColor = '#fbbf24';
+        ctx.shadowBlur = 8;
+        ctx.strokeStyle = '#fbbf24';
+        ctx.fillStyle = '#fbbf24';
+        ctx.lineWidth = 2.8;
+
+        ctx.beginPath();
+        ctx.moveTo(arrowX, arrowTop);
+        ctx.lineTo(arrowX, arrowBot);
+        ctx.stroke();
+
+        ctx.beginPath();
+        if (coil.dir === 1) {
+          ctx.moveTo(arrowX, arrowTop - 6);
+          ctx.lineTo(arrowX - 5, arrowTop + 4);
+          ctx.lineTo(arrowX + 5, arrowTop + 4);
+        } else {
+          ctx.moveTo(arrowX, arrowBot + 6);
+          ctx.lineTo(arrowX - 5, arrowBot - 4);
+          ctx.lineTo(arrowX + 5, arrowBot - 4);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        for (let i = 0; i < 6; i++) {
+          let t = ((i / 6) + (animOffset * 0.01 * coil.dir)) % 1;
+          if (t < 0) t += 1;
+          const theta = Math.PI * 0.5 - t * Math.PI;
+          const px = cx + Math.cos(theta) * (radius * 0.25);
+          const py = cy + Math.sin(theta) * radius;
+          ctx.beginPath();
+          ctx.arc(px, py, 2.8, 0, Math.PI * 2);
+          ctx.fillStyle = '#fef08a';
+          ctx.fill();
+        }
+      }
+
+      // 코일 하단 상태 라벨
+      const badgeText = coil.powerOn
+        ? `${coil.label} [ON ${coil.dir === 1 ? '↑' : '↓'}]`
+        : `${coil.label} [OFF]`;
+      ctx.font = 'bold 11px "Noto Sans KR"';
+      const textW = ctx.measureText(badgeText).width + 14;
+      ctx.fillStyle = coil.powerOn ? 'rgba(244, 63, 94, 0.92)' : 'rgba(30, 41, 59, 0.92)';
+      ctx.beginPath();
+      ctx.roundRect(cx - textW / 2, cy + radius + 9, textW, 20, 6);
+      ctx.fill();
+      ctx.strokeStyle = isSelected ? '#fbbf24' : 'rgba(148, 163, 184, 0.4)';
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+
+      ctx.fillStyle = '#ffffff';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(badgeText, cx, cy + radius + 19);
+
+      ctx.restore();
+    }
+
+    function renderGame() {
+      if (currentTab !== 'game') return;
+      const rect = gameCanvas.getBoundingClientRect();
+      const w = rect.width;
+      const h = rect.height;
+      if (w === 0 || h === 0) return;
+
+      const st = surfStages[gameState.currentStage];
+
+      // 1. 어두운 실험판 배경 & 모눈선
+      gameCtx.fillStyle = '#0b1120';
+      gameCtx.fillRect(0, 0, w, h);
+
+      gameCtx.strokeStyle = 'rgba(51, 65, 85, 0.35)';
+      gameCtx.lineWidth = 1;
+      const gridSize = 40;
+      for (let gx = 0; gx < w; gx += gridSize) {
+        gameCtx.beginPath();
+        gameCtx.moveTo(gx, 0);
+        gameCtx.lineTo(gx, h);
+        gameCtx.stroke();
+      }
+      for (let gy = 0; gy < h; gy += gridSize) {
+        gameCtx.beginPath();
+        gameCtx.moveTo(0, gy);
+        gameCtx.lineTo(w, gy);
+        gameCtx.stroke();
+      }
+
+      // 2. 전원이 켜진(ON) 코일의 자기장 유효 범위 및 범위 내부를 가득 채우는 화살표 렌더링
+      const { coilRadius } = getSurfRadii(w, h);
+      const activeCoils = gameState.coils.filter(c => c.powerOn);
+
+      // (a) 각 활성 코일의 자기장 유효 범위 원형 테두리 표시 (코일 세기에 따라 반경 변화)
+      activeCoils.forEach(c => {
+        const cx = c.rx * w;
+        const cy = c.ry * h;
+        const { maxFieldRange } = getSurfRadii(w, h, c.strength);
+        gameCtx.save();
+        gameCtx.beginPath();
+        gameCtx.arc(cx, cy, maxFieldRange, 0, Math.PI * 2);
+        gameCtx.fillStyle = 'rgba(56, 189, 248, 0.05)';
+        gameCtx.fill();
+        gameCtx.strokeStyle = 'rgba(56, 189, 248, 0.28)';
+        gameCtx.lineWidth = 1.5;
+        gameCtx.setLineDash([5, 5]);
+        gameCtx.stroke();
+        gameCtx.restore();
+      });
+
+      // (b) 자기장 유효 범위 내부 전체를 촘촘한 격자 화살표로 가득 표시
+      if (activeCoils.length > 0) {
+        const step = 28;
+        for (let gx = step * 0.6; gx < w - 8; gx += step) {
+          for (let gy = step * 0.6; gy < h - 8; gy += step) {
+            let insideRange = false;
+            let bx = 0;
+            let by = 0;
+
+            for (const c of activeCoils) {
+              const cx = c.rx * w;
+              const cy = c.ry * h;
+              const { maxFieldRange } = getSurfRadii(w, h, c.strength);
+              if (Math.hypot(gx - cx, gy - cy) <= maxFieldRange - 4) {
+                insideRange = true;
+                const cf = calculateSurfCoilField(gx, gy, cx, cy, coilRadius, maxFieldRange, c.dir, c.strength);
+                bx += cf.bx;
+                by += cf.by;
+              }
+            }
+
+            if (!insideRange || Math.hypot(bx, by) < 0.01) continue;
+
+            const ang = Math.atan2(by, bx);
+            gameCtx.save();
+            gameCtx.translate(gx, gy);
+            gameCtx.rotate(ang);
+            gameCtx.strokeStyle = 'rgba(56, 189, 248, 0.68)';
+            gameCtx.lineWidth = 1.7;
+
+            gameCtx.beginPath();
+            gameCtx.moveTo(-7.5, 0);
+            gameCtx.lineTo(7.5, 0);
+            gameCtx.lineTo(3, -3.5);
+            gameCtx.moveTo(7.5, 0);
+            gameCtx.lineTo(3, 3.5);
+            gameCtx.stroke();
+            gameCtx.restore();
+          }
+        }
+      }
+
+      // 3. 장애물 벽 그리기
+      st.walls.forEach(wall => {
+        const wx = (wall.rx - wall.rw / 2) * w;
+        const wy = (wall.ry - wall.rh / 2) * h;
+        const ww = wall.rw * w;
+        const wh = wall.rh * h;
+
+        gameCtx.save();
+        gameCtx.fillStyle = '#334155';
+        gameCtx.strokeStyle = '#f43f5e';
+        gameCtx.lineWidth = 2;
+        gameCtx.beginPath();
+        gameCtx.roundRect(wx, wy, ww, wh, 8);
+        gameCtx.fill();
+        gameCtx.stroke();
+
+        gameCtx.fillStyle = 'rgba(244, 63, 94, 0.25)';
+        gameCtx.fillRect(wx + 4, wy + 4, ww - 8, wh - 8);
+        gameCtx.restore();
+      });
+
+      // 4. 출발 지점 & 골인 깃발 그리기
+      const sx = st.start.rx * w;
+      const sy = st.start.ry * h;
+      gameCtx.beginPath();
+      gameCtx.arc(sx, sy, 26, 0, Math.PI * 2);
+      gameCtx.fillStyle = 'rgba(56, 189, 248, 0.15)';
+      gameCtx.fill();
+      gameCtx.strokeStyle = 'rgba(56, 189, 248, 0.5)';
+      gameCtx.lineWidth = 2;
+      gameCtx.stroke();
+
+      const gx = st.goal.rx * w;
+      const gy = st.goal.ry * h;
+      const pulse = Math.sin(gameState.animTick * 0.08) * 5;
+
+      const goalGlow = gameCtx.createRadialGradient(gx, gy, 5, gx, gy, 42 + pulse);
+      goalGlow.addColorStop(0, 'rgba(251, 191, 36, 0.75)');
+      goalGlow.addColorStop(1, 'rgba(251, 191, 36, 0)');
+      gameCtx.fillStyle = goalGlow;
+      gameCtx.beginPath();
+      gameCtx.arc(gx, gy, 42 + pulse, 0, Math.PI * 2);
+      gameCtx.fill();
+
+      gameCtx.beginPath();
+      gameCtx.arc(gx, gy, 24, 0, Math.PI * 2);
+      gameCtx.fillStyle = 'rgba(251, 191, 36, 0.25)';
+      gameCtx.fill();
+      gameCtx.strokeStyle = '#fbbf24';
+      gameCtx.lineWidth = 2.5;
+      gameCtx.stroke();
+
+      gameCtx.font = '26px sans-serif';
+      gameCtx.textAlign = 'center';
+      gameCtx.textBaseline = 'middle';
+      gameCtx.fillText('🏁', gx, gy);
+
+      // 5. 설치된 원형 코일들 그리기
+      gameState.coils.forEach((c, idx) => {
+        drawSurfCoil(gameCtx, c.rx * w, c.ry * h, coilRadius, c, idx === gameState.selectedCoilIdx, gameState.animTick);
+      });
+
+      // 6. 탐사선 이동 물리 및 충돌 판정
+      if (gameState.mode === 'running') {
+        const field = getSurfFieldAt(gameState.probe.x, gameState.probe.y, w, h);
+        // 자기장 영역 내부에서는 자기장 방향(화살표 방향)을 따라 휘어지고,
+        // 자기장 영역 밖에서는 방향 변화 없이 직진(관성 유지)
+        if (field) {
+          const targetAngle = Math.atan2(field.by, field.bx);
+          gameState.probe.angle = lerpAngle(gameState.probe.angle, targetAngle, 0.22);
+        }
+        gameState.probe.x += Math.cos(gameState.probe.angle) * gameState.probe.speed;
+        gameState.probe.y += Math.sin(gameState.probe.angle) * gameState.probe.speed;
+
+        const lastPt = gameState.probe.trail[gameState.probe.trail.length - 1];
+        if (!lastPt || Math.hypot(gameState.probe.x - lastPt.x, gameState.probe.y - lastPt.y) > 8) {
+          gameState.probe.trail.push({ x: gameState.probe.x, y: gameState.probe.y });
+        }
+
+        if (Math.hypot(gameState.probe.x - gx, gameState.probe.y - gy) < 30) {
+          onSurfClear();
+        }
+
+        if (
+          gameState.probe.x < 14 || gameState.probe.x > w - 14 ||
+          gameState.probe.y < 14 || gameState.probe.y > h - 14
+        ) {
+          onSurfCrash('실험판 밖으로 벗어났습니다! 코일 위치나 전류 방향을 조절해 보세요.');
+        }
+
+        for (const wall of st.walls) {
+          const wx = (wall.rx - wall.rw / 2) * w;
+          const wy = (wall.ry - wall.rh / 2) * h;
+          const ww = wall.rw * w;
+          const wh = wall.rh * h;
+          if (
+            gameState.probe.x + 12 > wx && gameState.probe.x - 12 < wx + ww &&
+            gameState.probe.y + 12 > wy && gameState.probe.y - 12 < wy + wh
+          ) {
+            onSurfCrash('장애물 벽에 부딪혔습니다! 자기장의 방향을 바꿔 길을 열어보세요.');
+            break;
+          }
+        }
+      } else if (gameState.mode === 'planning') {
+        const field = getSurfFieldAt(gameState.probe.x, gameState.probe.y, w, h);
+        const targetAngle = field ? Math.atan2(field.by, field.bx) : -Math.PI / 2;
+        gameState.probe.angle = lerpAngle(gameState.probe.angle, targetAngle, 0.2);
+      }
+
+      // 7. 탐사선 항적 점선 및 탐사선 그리기
+      if (gameState.probe.trail.length > 1) {
+        gameCtx.save();
+        gameCtx.beginPath();
+        gameCtx.moveTo(gameState.probe.trail[0].x, gameState.probe.trail[0].y);
+        for (let i = 1; i < gameState.probe.trail.length; i++) {
+          gameCtx.lineTo(gameState.probe.trail[i].x, gameState.probe.trail[i].y);
+        }
+        gameCtx.strokeStyle = 'rgba(244, 63, 94, 0.65)';
+        gameCtx.lineWidth = 4;
+        gameCtx.setLineDash([8, 6]);
+        gameCtx.stroke();
+        gameCtx.restore();
+      }
+
+      drawCompassProbe(gameCtx, gameState.probe.x, gameState.probe.y, gameState.probe.angle, gameState.animTick);
+
+      gameState.animTick += 1;
+    }
+
+    /* ==========================================================================
+       5. 메인 애니메이션 루프 및 초기화
+       ========================================================================== */
+    function mainLoop() {
+      renderLab3D();
+      renderGame();
+      requestAnimationFrame(mainLoop);
+    }
+
+    window.addEventListener('resize', () => {
+      if (currentTab === 'lab') resizeLab3D();
+      else resizeGameCanvas();
+    });
+
+    window.onload = () => {
+      initLab3D();
+      updateSlotHoverState();
+      mainLoop();
+    };
+  </script>
+</body>
+</html>
